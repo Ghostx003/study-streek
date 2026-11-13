@@ -289,6 +289,54 @@ export function useStudyStreak() {
     });
   }, []);
 
+  // Toggle historical day attendance
+  const toggleHistoricalDay = useCallback((dateStr) => {
+    const today = getLocalDateString();
+    if (dateStr === today) {
+      setTodayRecord(prev => {
+        if (!prev) return prev;
+        const newCompleted = !prev.isCompleted;
+        return {
+          ...prev,
+          isCompleted: newCompleted,
+          updatedAt: new Date().toISOString()
+        };
+      });
+      return;
+    }
+
+    setHistory(prev => {
+      const existing = prev[dateStr];
+      const nowIso = new Date().toISOString();
+      if (existing) {
+        return {
+          ...prev,
+          [dateStr]: {
+            ...existing,
+            isCompleted: !existing.isCompleted,
+            updatedAt: nowIso
+          }
+        };
+      } else {
+        // Create completed attendance record for that date
+        return {
+          ...prev,
+          [dateStr]: {
+            date: dateStr,
+            targetHours: 6,
+            mode: 'hourly',
+            sessions: [],
+            completedDurationMinutes: 360,
+            targetDurationMinutes: 360,
+            isCompleted: true,
+            completedAt: nowIso,
+            updatedAt: nowIso
+          }
+        };
+      }
+    });
+  }, []);
+
   // Theme preference
   const toggleTheme = useCallback(() => {
     setPreferences(prev => ({
@@ -316,6 +364,7 @@ export function useStudyStreak() {
     setDailyTarget,
     editDailyTarget,
     toggleSession,
+    toggleHistoricalDay,
     toggleTheme,
     updateSyncConnection,
     applyRemoteState,

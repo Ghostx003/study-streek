@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Check, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, X, Calendar as CalendarIcon } from 'lucide-react';
 import { getCalendarMonthData, getLocalDateString } from '../utils/dateUtils';
 import { HistoryDayModal } from './HistoryDayModal';
 
-export function CalendarSection({ history = {}, todayRecord = null }) {
+export function CalendarSection({ history = {}, todayRecord = null, onToggleHistoricalDay }) {
   const todayStr = getLocalDateString();
   const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth() + 1); // 1-12
@@ -45,7 +45,8 @@ export function CalendarSection({ history = {}, todayRecord = null }) {
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
-  const weekdayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  // 2-Letter Weekday Labels matching the exact reference image
+  const weekdayLabels = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
 
   const getDayStatus = (dateStr) => {
     if (!dateStr) return { status: 'empty' };
@@ -152,87 +153,99 @@ export function CalendarSection({ history = {}, todayRecord = null }) {
   };
 
   return (
-    <div className="calendar-section card">
-      {/* Calendar Header with Navigation */}
-      <div className="calendar-header">
-        <div className="calendar-title-group">
-          <h3 className="calendar-month-title">
-            {monthNames[currentMonth - 1]} {currentYear}
-          </h3>
+    <div className="attendance-calendar-card">
+      {/* Calendar Header with Icon, Title, and Subtitle */}
+      <div className="attendance-header">
+        <div className="attendance-title-row">
+          <CalendarIcon className="attendance-icon" />
+          <h2 className="attendance-title">ATTENDANCE CALENDAR</h2>
         </div>
+        <p className="attendance-subtitle">
+          Tap any past or today's date to toggle workout attendance
+        </p>
+      </div>
 
-        <div className="calendar-controls">
+      {/* Navigation Controls Row */}
+      <div className="attendance-controls">
+        <button
+          type="button"
+          className="btn-attendance-today"
+          onClick={handleJumpToToday}
+        >
+          Today
+        </button>
+
+        <div className="attendance-month-pill">
           <button
             type="button"
-            className="btn-calendar-nav"
-            onClick={handleJumpToToday}
-            title="Jump to current month"
+            className="btn-month-chevron"
+            onClick={handlePrevMonth}
+            aria-label="Previous month"
           >
-            Today
+            <ChevronLeft className="chevron-icon" />
           </button>
-          <div className="nav-arrows">
-            <button
-              type="button"
-              className="btn-calendar-arrow"
-              onClick={handlePrevMonth}
-              aria-label="Previous month"
-            >
-              <ChevronLeft className="icon-sm" />
-            </button>
-            <button
-              type="button"
-              className="btn-calendar-arrow"
-              onClick={handleNextMonth}
-              aria-label="Next month"
-            >
-              <ChevronRight className="icon-sm" />
-            </button>
-          </div>
+          <span className="attendance-month-text">
+            {monthNames[currentMonth - 1]} {currentYear}
+          </span>
+          <button
+            type="button"
+            className="btn-month-chevron"
+            onClick={handleNextMonth}
+            aria-label="Next month"
+          >
+            <ChevronRight className="chevron-icon" />
+          </button>
         </div>
       </div>
 
-      {/* Weekday Labels */}
-      <div className="calendar-weekdays">
+      {/* Weekday 2-Letter Headers */}
+      <div className="attendance-weekdays">
         {weekdayLabels.map((lbl, idx) => (
-          <div key={idx} className="calendar-weekday-cell">
+          <div key={idx} className="attendance-weekday-col">
             {lbl}
           </div>
         ))}
       </div>
 
-      {/* Calendar Days Grid */}
-      <div className="calendar-grid">
+      {/* Calendar Grid with exact Rounded Squircle Cells */}
+      <div className="attendance-grid">
         {daysData.map((item, idx) => {
           if (!item) {
-            return <div key={`empty-${idx}`} className="calendar-day-cell empty" />;
+            return <div key={`empty-${idx}`} className="attendance-day-cell empty" />;
           }
 
           const { day, dateStr } = item;
-          const { status } = getDayStatus(dateStr);
+          const { status, isCompleted } = getDayStatus(dateStr);
           const isToday = dateStr === todayStr;
+
+          // Determine visual styling class based on exact status
+          let cellStateClass = 'cell-future';
+          if (status === 'completed') {
+            cellStateClass = 'cell-completed';
+          } else if (status === 'incomplete') {
+            cellStateClass = 'cell-incomplete';
+          } else if (status === 'in-progress') {
+            cellStateClass = 'cell-inprogress';
+          }
 
           return (
             <button
               key={dateStr}
               type="button"
-              className={`calendar-day-cell ${isToday ? 'current-day' : ''} ${status}`}
+              className={`attendance-day-cell ${cellStateClass} ${isToday ? 'cell-today' : ''}`}
               onClick={() => handleDayClick(item)}
               aria-label={`${dateStr}: ${status}`}
             >
-              <span className="day-number">{day}</span>
-              <div className="day-indicator">
+              <span className="attendance-day-num">{day}</span>
+              <div className="attendance-day-icon-wrap">
                 {status === 'completed' && (
-                  <span className="indicator-tick" title="Target Completed">
-                    <Check className="indicator-icon" />
-                  </span>
+                  <Check className="cell-check-icon" />
                 )}
                 {status === 'incomplete' && (
-                  <span className="indicator-cross" title="Target Not Completed">
-                    <X className="indicator-icon" />
-                  </span>
+                  <X className="cell-cross-icon" />
                 )}
                 {status === 'in-progress' && (
-                  <span className="indicator-neutral" title="In Progress" />
+                  <span className="cell-neutral-indicator" />
                 )}
               </div>
             </button>
@@ -245,6 +258,11 @@ export function CalendarSection({ history = {}, todayRecord = null }) {
         <HistoryDayModal
           dayInfo={selectedDayInfo}
           onClose={() => setSelectedDayInfo(null)}
+          onToggleAttendance={() => {
+            if (onToggleHistoricalDay) {
+              onToggleHistoricalDay(selectedDayInfo.dateStr);
+            }
+          }}
         />
       )}
     </div>

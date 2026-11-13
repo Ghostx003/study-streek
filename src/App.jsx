@@ -22,6 +22,7 @@ export function App() {
     setDailyTarget,
     editDailyTarget,
     toggleSession,
+    toggleHistoricalDay,
     toggleTheme,
     updateSyncConnection,
     applyRemoteState,
@@ -89,15 +90,24 @@ export function App() {
   };
 
   return (
-    <div className="app-container">
-      {/* App Header */}
-      <Header
-        theme={preferences?.theme || 'dark'}
-        onToggleTheme={toggleTheme}
-        onOpenSync={() => setIsSyncModalOpen(true)}
-        syncStatus={syncStatus}
-        syncId={syncId}
-      />
+    <div className="app-layout">
+      {/* Tailwind-Inspired Ambient Background Mesh & Lighting Orbs */}
+      <div className="ambient-background" aria-hidden="true">
+        <div className="ambient-orb orb-emerald" />
+        <div className="ambient-orb orb-violet" />
+        <div className="ambient-orb orb-cyan" />
+        <div className="ambient-dot-grid" />
+      </div>
+
+      <div className="app-container">
+        {/* App Header */}
+        <Header
+          theme={preferences?.theme || 'dark'}
+          onToggleTheme={toggleTheme}
+          onOpenSync={() => setIsSyncModalOpen(true)}
+          syncStatus={syncStatus}
+          syncId={syncId}
+        />
 
       {/* Main Study Tracker Area */}
       <main className="main-content">
@@ -122,6 +132,7 @@ export function App() {
       <CalendarSection
         history={history}
         todayRecord={todayRecord}
+        onToggleHistoricalDay={toggleHistoricalDay}
       />
 
       {/* Consistency Statistics Section */}
@@ -150,6 +161,7 @@ export function App() {
           onClose={() => setIsSyncModalOpen(false)}
         />
       )}
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { X, Check, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { formatDisplayDate, formatDuration } from '../utils/dateUtils';
 
-export function HistoryDayModal({ dayInfo, onClose }) {
+export function HistoryDayModal({ dayInfo, onClose, onToggleAttendance }) {
   if (!dayInfo) return null;
 
   const {
@@ -113,8 +113,20 @@ export function HistoryDayModal({ dayInfo, onClose }) {
           )}
         </div>
 
-        <div className="modal-actions">
-          <button type="button" className="btn-secondary btn-block" onClick={onClose}>
+        <div className="modal-actions history-modal-actions">
+          {onToggleAttendance && (
+            <button
+              type="button"
+              className={`btn-toggle-attendance ${isCompleted ? 'btn-mark-incomplete' : 'btn-mark-complete'}`}
+              onClick={() => {
+                onToggleAttendance();
+                onClose();
+              }}
+            >
+              {isCompleted ? 'Mark as Incomplete ✕' : 'Mark as Completed ✓'}
+            </button>
+          )}
+          <button type="button" className="btn-secondary" onClick={onClose}>
             Close
           </button>
         </div>
