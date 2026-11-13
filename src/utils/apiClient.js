@@ -1,18 +1,23 @@
 // High-reliability API client with automatic direct-port fallback
-// Prevents Vite proxy socket stalls or IPv6/IPv4 lookup delays
+// Supports both cloud deployments (Vercel) and local network/Tailscale environments
 
 export async function apiRequest(endpoint, options = {}) {
-  const timeoutMs = options.timeoutMs || 2500;
+  const timeoutMs = options.timeoutMs || 4000;
   const isBrowser = typeof window !== 'undefined';
   const hostname = isBrowser ? window.location.hostname : 'localhost';
+  const isLocalOrLan =
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname.startsWith('192.168.') ||
+    hostname.startsWith('10.') ||
+    hostname.startsWith('172.') ||
+    hostname.startsWith('100.'); // Tailscale
 
-  // Priority candidates:
-  // 1. Relative URL (uses Vite proxy or direct Express if served on 3001)
-  // 2. Direct port 3001 on current hostname (bypasses Vite proxy if stalled)
-  // 3. Direct 127.0.0.1:3001 if on localhost
+  // Primary candidate: relative URL (works on Vercel serverless and Vite dev proxy)
   const candidates = [endpoint];
 
-  if (isBrowser && window.location.port !== '3001') {
+  // Direct port 3001 fallback ONLY for local/LAN/Tailscale environments
+  if (isBrowser && isLocalOrLan && window.location.port !== '3001') {
     candidates.push(`http://${hostname}:3001${endpoint}`);
     if (hostname === 'localhost') {
       candidates.push(`http://127.0.0.1:3001${endpoint}`);
@@ -21,7 +26,8 @@ export async function apiRequest(endpoint, options = {}) {
 
   let lastError = null;
 
-  for (const url of candidates) {
+  for (let i = 0; i < candidates.length; i++) {
+    const url = candidates[i];
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -33,8 +39,13 @@ export async function apiRequest(endpoint, options = {}) {
 
       clearTimeout(timer);
 
-      // Return valid responses (including 400s with error messages)
-      if (res.ok || (res.status >= 400 && res.status < 500)) {
+      // Success
+      if (res.ok) {
+        return res;
+      }
+
+      // If client error other than 404, or if this is the last candidate, return the response
+      if ((res.status >= 400 && res.status < 500 && res.status !== 404) || i === candidates.length - 1) {
         return res;
       }
     } catch (err) {
