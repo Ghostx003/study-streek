@@ -1,4 +1,4 @@
-const CACHE_NAME = 'studystreak-cache-v1';
+const CACHE_NAME = 'studystreak-cache-v3';
 const ASSETS = [
   '/',
   '/index.html',
@@ -30,16 +30,33 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || e.request.url.includes('/api/')) {
     return;
   }
-  e.respondWith(
-    caches.match(e.request).then((res) => {
-      return res || fetch(e.request).then((fetchRes) => {
-        return caches.open(CACHE_NAME).then((cache) => {
-          if (e.request.url.startsWith('http')) {
-            cache.put(e.request, fetchRes.clone());
+
+  // Network-first for HTML navigations so users never get stuck with stale hashed asset references
+  if (e.request.mode === 'navigate' || e.request.headers.get('accept')?.includes('text/html')) {
+    e.respondWith(
+      fetch(e.request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
           }
-          return fetchRes;
-        });
-      });
-    }).catch(() => caches.match('/'))
+          return response;
+        })
+        .catch(() => caches.match(e.request).then((res) => res || caches.match('/index.html') || caches.match('/')))
+    );
+    return;
+  }
+
+  // Assets (JS, CSS, images): Try network first, then cache, ensuring freshest code
+  e.respondWith(
+    fetch(e.request)
+      .then((networkResponse) => {
+        if (networkResponse.ok && e.request.url.startsWith('http')) {
+          const clone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+        }
+        return networkResponse;
+      })
+      .catch(() => caches.match(e.request))
   );
 });

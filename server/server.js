@@ -266,6 +266,43 @@ app.get('/api/sync/:syncId', (req, res) => {
 
 // Serve frontend build if available
 if (fs.existsSync(DIST_DIR)) {
+  // Stale asset fallback middleware: if an older cached HTML requests an old hash that was rebuilt, serve latest bundle
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/assets/index-') && req.path.endsWith('.js')) {
+      const distAssetsDir = path.join(DIST_DIR, 'assets');
+      if (fs.existsSync(distAssetsDir)) {
+        const files = fs.readdirSync(distAssetsDir);
+        const exactFile = path.basename(req.path);
+        if (files.includes(exactFile)) {
+          return res.sendFile(path.join(distAssetsDir, exactFile));
+        }
+        const jsFile = files.find(f => f.startsWith('index-') && f.endsWith('.js'));
+        if (jsFile) {
+          return res.sendFile(path.join(distAssetsDir, jsFile));
+        }
+      }
+      return res.type('application/javascript').send('window.location.reload();');
+    }
+
+    if (req.path.startsWith('/assets/index-') && req.path.endsWith('.css')) {
+      const distAssetsDir = path.join(DIST_DIR, 'assets');
+      if (fs.existsSync(distAssetsDir)) {
+        const files = fs.readdirSync(distAssetsDir);
+        const exactFile = path.basename(req.path);
+        if (files.includes(exactFile)) {
+          return res.sendFile(path.join(distAssetsDir, exactFile));
+        }
+        const cssFile = files.find(f => f.startsWith('index-') && f.endsWith('.css'));
+        if (cssFile) {
+          return res.sendFile(path.join(distAssetsDir, cssFile));
+        }
+      }
+      return res.type('text/css').send('');
+    }
+
+    next();
+  });
+
   app.use(express.static(DIST_DIR));
   app.use((req, res, next) => {
     if (req.path.startsWith('/api')) return next();
