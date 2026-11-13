@@ -8,6 +8,7 @@ import { SessionList } from './components/SessionList';
 import { CalendarSection } from './components/CalendarSection';
 import { StatisticsSection } from './components/StatisticsSection';
 import { SyncModal } from './components/SyncModal';
+import { apiRequest } from './utils/apiClient';
 
 export function App() {
   const {
@@ -46,7 +47,7 @@ export function App() {
 
       if (pairToken || code) {
         // Auto-claim pairing
-        fetch('/api/pair/claim', {
+        apiRequest('/api/pair/claim', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

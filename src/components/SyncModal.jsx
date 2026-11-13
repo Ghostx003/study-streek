@@ -13,6 +13,7 @@ import {
   Check
 } from 'lucide-react';
 import { detectIsMobile } from '../utils/deviceDetector';
+import { apiRequest } from '../utils/apiClient';
 
 export function SyncModal({
   currentState,
@@ -24,7 +25,27 @@ export function SyncModal({
   const [mode, setMode] = useState(isMobileInitial ? 'scan' : 'generate'); // 'generate' (desktop) | 'scan' (mobile)
 
   // Desktop generate state
-  const [pairingData, setPairingData] = useState(null);
+  const [pairingData, setPairingData] = useState(() => {
+    // Generate initial pairing credentials synchronously for instant display
+    const localToken = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID().replace(/-/g, '')
+      : Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const localCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const effectiveSyncId = syncId || `sync_${localToken.substring(0, 12)}`;
+
+    const host = typeof window !== 'undefined'
+      ? (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? window.location.hostname : '100.83.20.17')
+      : '100.83.20.17';
+    const port = typeof window !== 'undefined' && window.location.port ? window.location.port : '5180';
+
+    return {
+      token: localToken,
+      code: localCode,
+      syncId: effectiveSyncId,
+      qrUrl: `http://${host}:${port}/?pairToken=${localToken}&syncId=${effectiveSyncId}&code=${localCode}`
+    };
+  });
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [genError, setGenError] = useState('');
   const [isPairedSuccess, setIsPairedSuccess] = useState(false);
@@ -38,31 +59,43 @@ export function SyncModal({
   const scannerRef = useRef(null);
   const pollingRef = useRef(null);
 
-  // 1. Desktop: Create pairing session
+  // 1. Desktop: Register pairing session on server
   const createPairingSession = async () => {
-    setIsGenerating(true);
     setGenError('');
+
+    const token = pairingData.token;
+    const code = pairingData.code;
+    const effectiveSyncId = pairingData.syncId;
+
     try {
-      const res = await fetch('/api/pair/create', {
+      const res = await apiRequest('/api/pair/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          token,
+          code,
           desktopState: currentState,
-          syncId: syncId || undefined,
+          syncId: effectiveSyncId,
           clientOrigin: typeof window !== 'undefined' ? window.location.origin : undefined
         })
       });
 
-      if (!res.ok) throw new Error('Failed to create pairing session');
-      const data = await res.json();
-      setPairingData(data);
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data.qrUrl) {
+          setPairingData(prev => ({
+            ...prev,
+            qrUrl: data.qrUrl
+          }));
+        }
+      }
 
       // Start polling for mobile connection
-      startPolling(data.token);
+      startPolling(token);
     } catch (err) {
-      setGenError(err.message || 'Unable to initialize device pairing.');
-    } finally {
-      setIsGenerating(false);
+      console.warn('Pairing registration notice:', err.message);
+      // Still start polling via apiRequest
+      startPolling(token);
     }
   };
 
@@ -72,8 +105,8 @@ export function SyncModal({
 
     pollingRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/pair/poll?token=${token}`);
-        if (res.ok) {
+        const res = await apiRequest(`/api/pair/poll?token=${token}`, { timeoutMs: 2000 });
+        if (res && res.ok) {
           const data = await res.json();
           if (data.status === 'paired') {
             clearInterval(pollingRef.current);
@@ -196,7 +229,7 @@ export function SyncModal({
     }
 
     try {
-      const res = await fetch('/api/pair/claim', {
+      const res = await apiRequest('/api/pair/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

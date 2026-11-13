@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { getLocalDateString, formatTimestamp } from '../utils/dateUtils';
 import { generateSessions, recalculateSessions } from '../utils/sessionGenerator';
 import { loadStoredState, saveStoredState } from '../utils/storage';
+import { apiRequest } from '../utils/apiClient';
 
 export function useStudyStreak() {
   const [currentDateStr, setCurrentDateStr] = useState(() => getLocalDateString());
@@ -12,6 +13,9 @@ export function useStudyStreak() {
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [syncStatus, setSyncStatus] = useState('idle'); // 'idle' | 'syncing' | 'synced' | 'error'
   const [isInitialized, setIsInitialized] = useState(false);
+
+  const isApplyingRemoteRef = useRef(false);
+  const syncTimeoutRef = useRef(null);
 
   // Keep a ref of state to avoid stale closures in sync intervals
   const stateRef = useRef({ todayRecord, history, preferences, syncId });
@@ -110,18 +114,21 @@ export function useStudyStreak() {
 
     saveStoredState(payload);
 
-    // If syncId exists, trigger background sync to backend
-    if (syncId) {
-      triggerBackgroundSync(payload);
+    // If syncId exists and not currently applying remote state, debounce background sync
+    if (syncId && !isApplyingRemoteRef.current) {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+      syncTimeoutRef.current = setTimeout(() => {
+        triggerBackgroundSync(payload);
+      }, 800);
     }
   }, [todayRecord, history, preferences, syncId, currentDateStr, isInitialized]);
 
-  // Background sync helper
+  // Background sync helper using robust apiClient
   const triggerBackgroundSync = useCallback(async (stateToSync) => {
     if (!stateToSync.syncId) return;
     try {
       setSyncStatus('syncing');
-      const res = await fetch('/api/sync', {
+      const res = await apiRequest('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -131,7 +138,7 @@ export function useStudyStreak() {
         })
       });
 
-      if (res.ok) {
+      if (res && res.ok) {
         const data = await res.json();
         if (data.success) {
           if (!data.updated && data.state) {
@@ -147,15 +154,20 @@ export function useStudyStreak() {
     }
   }, []);
 
-  // Apply remote state from synchronization
+  // Apply remote state from synchronization without triggering infinite loop
   const applyRemoteState = useCallback((remote) => {
     if (!remote) return;
+    isApplyingRemoteRef.current = true;
     if (remote.today) setTodayRecord(remote.today);
     if (remote.history) setHistory(remote.history);
     if (remote.preferences) setPreferences(remote.preferences);
     if (remote.syncId) setSyncId(remote.syncId);
     setLastSyncedAt(Date.now());
     setSyncStatus('synced');
+
+    setTimeout(() => {
+      isApplyingRemoteRef.current = false;
+    }, 1000);
   }, []);
 
   // 1. Establish today's target and mode

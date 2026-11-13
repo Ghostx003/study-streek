@@ -58,6 +58,17 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+// Request logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    if (req.path.startsWith('/api')) {
+      console.log(`[API] ${req.method} ${req.path} -> ${res.statusCode} (${Date.now() - start}ms)`);
+    }
+  });
+  next();
+});
+
 // Network information
 app.get('/api/network-info', (req, res) => {
   const addrs = getNetworkAddresses();
@@ -71,9 +82,9 @@ app.get('/api/network-info', (req, res) => {
 
 // Create a new pairing session (Called by Desktop)
 app.post('/api/pair/create', (req, res) => {
-  const { desktopState, syncId: existingSyncId, clientOrigin } = req.body || {};
-  const token = crypto.randomBytes(16).toString('hex');
-  const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code e.g. 583921
+  const { token: clientToken, code: clientCode, desktopState, syncId: existingSyncId, clientOrigin } = req.body || {};
+  const token = clientToken || crypto.randomBytes(16).toString('hex');
+  const code = clientCode || Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code e.g. 583921
   const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
 
   // Existing or new syncId
@@ -263,9 +274,9 @@ if (fs.existsSync(DIST_DIR)) {
 }
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, () => {
   const addrs = getNetworkAddresses();
-  console.log(`[StudyStreak Backend] Listening on 0.0.0.0:${PORT}`);
+  console.log(`[StudyStreak Backend] Listening on port ${PORT} (dual-stack IPv4/IPv6)`);
   console.log(`  - Local:     http://localhost:${PORT}`);
   console.log(`  - LAN:       http://${addrs.lanIp}:${PORT}`);
   console.log(`  - Tailscale: http://${addrs.tailscaleIp}:${PORT}`);
